@@ -32,17 +32,24 @@ def get_token():
     return TOKEN_CACHE["access_token"]
 
 def graph_get(url):
+    import requests.exceptions
     for attempt in range(5):
         token = get_token()
         headers = {"Authorization": f"Bearer {token}"}
-        resp = requests.get(url, headers=headers)
+        try:
+            resp = requests.get(url, headers=headers, timeout=60)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as e:
+            print(f"Network error: {e}. Retry {attempt+1}/5 in {2 ** attempt}s...")
+            time.sleep(2 ** attempt)
+            continue
+            
         if resp.status_code == 429:
             wait = int(resp.headers.get("Retry-After", "5"))
             print(f"429 Too Many Requests. Sleeping {wait} seconds...")
             time.sleep(wait)
             continue
         if 500 <= resp.status_code < 600:
-            print(f"5xx error {resp.status_code}. retry {attempt+1}/5")
+            print(f"5xx error {resp.status_code}. Retry {attempt+1}/5 in {2 ** attempt}s...")
             time.sleep(2 ** attempt)
             continue
         if resp.status_code != 200:
